@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Response Review Dashboard</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <input type="text" id="reviewer-name" placeholder="Enter your name (required)" />
+    <input type="file" id="file-input" accept=".xlsx,.csv" />
+    <input type="text" id="search" placeholder="Search by name" />
+    <select id="user-select">
+      <option value="">Select a user</option>
+    </select>
+    <select id="filter">
+      <option value="All">All</option>
+      <option value="Approved">✅ Approved</option>
+      <option value="Declined">❌ Declined</option>
+      <option value="Tentative">🔵 Tentative</option>
+    </select>
+    <button id="show-summary">📊 Show Summary Table</button>
+  </header>
+  <div class="cards" id="cards"></div>
+  <div id="summary" style="margin-top:2rem;"></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
+
