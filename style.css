@@ -50,8 +50,9 @@ input[type="file"], input[type="text"], select, button {
   font-size: 0.9rem;
   padding: 0.4rem;
 }
-.status-buttons .selected {
+.status-buttons button.selected {
   outline: 3px solid #555;
+  box-shadow: 0 0 6px rgba(0, 0, 0, 0.2);
 }
 .detail-view {
   background: white;

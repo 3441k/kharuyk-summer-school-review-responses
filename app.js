@@ -177,11 +177,11 @@ function showDetail(res) {
       ratings[id][reviewer].status = status;
       saveRatings();
     
-      // Visual indicator (update button state)
+      // Update UI
       Array.from(statusButtons.children).forEach(b => b.classList.remove('selected'));
       btn.classList.add('selected');
     
-      // Re-render card color in list view
+      // Optional: Refresh other areas if needed
       currentView = 'list';
       renderCards();
       showDetail(res);
