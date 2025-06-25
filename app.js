@@ -11,6 +11,27 @@ let responses = [];
 let currentView = 'list';
 let ratings = JSON.parse(localStorage.getItem('ratings_v1') || '{}');
 
+window.addEventListener('DOMContentLoaded', () => {
+  if (!fileInput.files.length) {
+    loadDefaultFile();
+  }
+});
+
+function loadDefaultFile() {
+  fetch('data/example.xlsx')
+    .then(res => res.arrayBuffer())
+    .then(data => {
+      const workbook = XLSX.read(data, { type: 'array' });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      responses = XLSX.utils.sheet_to_json(sheet);
+      populateUserSelect();
+      renderCards();
+    })
+    .catch(err => console.error('Failed to load default file:', err));
+}
+
+
+
 fileInput.addEventListener('change', handleFile);
 searchInput.addEventListener('input', () => {
   userSelect.value = '';
