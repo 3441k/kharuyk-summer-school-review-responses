@@ -118,6 +118,14 @@ function renderCards() {
     });
 
     card.appendChild(name);
+    if (reviewer && allRatings[reviewer]) {
+      const badge = document.createElement('div');
+      badge.style.fontSize = '0.85rem';
+      badge.style.marginTop = '4px';
+      badge.style.color = '#666';
+      badge.textContent = `Your rating: ${allRatings[reviewer].status || '—'}`;
+      card.appendChild(badge);
+    }
     card.appendChild(qaBlock);
     card.addEventListener('click', () => showDetail(res));
 
@@ -168,9 +176,17 @@ function showDetail(res) {
       ratings[id][reviewer] = ratings[id][reviewer] || {};
       ratings[id][reviewer].status = status;
       saveRatings();
-      alert(`You marked this as ${status}`);
-      renderCards(); // refresh list border colors
+    
+      // Visual indicator (update button state)
+      Array.from(statusButtons.children).forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+    
+      // Re-render card color in list view
+      currentView = 'list';
+      renderCards();
+      showDetail(res);
     };
+    
     statusButtons.appendChild(btn);
   });
 
