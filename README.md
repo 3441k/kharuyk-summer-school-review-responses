@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Response Review Dashboard
 
 A simple mobile-responsive web app to view, rate, and comment on form responses loaded from Excel or CSV files.
@@ -50,3 +51,6 @@ A simple mobile-responsive web app to view, rate, and comment on form responses 
 
 MIT License
 
+=======
+# kharuyk-summer-school-review-responses
+>>>>>>> 1358b14d6f87e8741bc02adf87add37a9ec805b6
