@@ -1,6 +1,10 @@
 const reviewerInput = document.getElementById('reviewer-name');
 const reviewerSelect = document.getElementById('reviewer-select');
 const addReviewerBtn = document.getElementById('add-reviewer');
+// const reviewerKeyInput = document.getElementById('reviewer-key');
+// const validateKeyBtn = document.getElementById('validate-key');
+// const toggleKeyVisibilityBtn = document.getElementById('toggle-key-visibility');
+// const keyStatus = document.getElementById('key-status');
 const fileInput = document.getElementById('file-input');
 const loadFileBtn = document.getElementById('load-file');
 const fileStatus = document.getElementById('file-status');
@@ -15,7 +19,10 @@ let responses = [];
 let currentView = 'list';
 let ratings = JSON.parse(localStorage.getItem('ratings_v1') || '{}');
 let reviewers = JSON.parse(localStorage.getItem('reviewers') || '[]');
+// let reviewerKeys = JSON.parse(localStorage.getItem('reviewer_keys') || '{}');
 let selectedFile = null;
+// let currentReviewerValidated = false;
+// let keyVisible = false;
 
 window.addEventListener('DOMContentLoaded', () => {
   loadReviewers();
@@ -42,19 +49,97 @@ function addReviewer() {
   }
   if (!reviewers.includes(name)) {
     reviewers.push(name);
+    // Generate a unique key for the reviewer
+    // const key = generateReviewerKey();
+    // reviewerKeys[name] = key;
+    
     localStorage.setItem('reviewers', JSON.stringify(reviewers));
+    // localStorage.setItem('reviewer_keys', JSON.stringify(reviewerKeys));
+    
     loadReviewers();
     reviewerInput.value = '';
-    highlightCurrentReviewer();
+    
+    // Show the generated key to the user
+    alert(`Reviewer "${name}" added successfully!`);
   } else {
     alert('Reviewer already exists');
   }
 }
 
+// function generateReviewerKey() {
+//   // Generate a 6-character alphanumeric key
+//   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+//   let result = '';
+//   for (let i = 0; i < 6; i++) {
+//     result += chars.charAt(Math.floor(Math.random() * chars.length));
+//   }
+//   return result;
+// }
+
+// function validateReviewerKey() {
+//   const reviewer = reviewerInput.value.trim();
+//   const key = reviewerKeyInput.value.trim();
+//   
+//   if (!reviewer) {
+//     alert('Please select a reviewer first');
+//     return;
+//   }
+//   
+//   if (!key) {
+//     alert('Please enter your reviewer key');
+//     return;
+//   }
+//   
+//   if (reviewerKeys[reviewer] === key) {
+//     currentReviewerValidated = true;
+//     keyStatus.textContent = '✅ Key validated';
+//     keyStatus.style.color = '#4CAF50';
+//     reviewerKeyInput.style.border = '2px solid #4CAF50';
+//     reviewerKeyInput.style.background = '#E8F5E8';
+//     
+//     // Enable reviewing functionality
+//     renderCards();
+//     alert('Key validated successfully! You can now review responses.');
+//   } else {
+//     currentReviewerValidated = false;
+//     keyStatus.textContent = '❌ Invalid key';
+//     keyStatus.style.color = '#F44336';
+//     reviewerKeyInput.style.border = '2px solid #F44336';
+//     reviewerKeyInput.style.background = '#FFEBEE';
+//     alert('Invalid key. Please check your key and try again.');
+//   }
+// }
+
+// function resetKeyValidation() {
+//   currentReviewerValidated = false;
+//   keyStatus.textContent = 'No key entered';
+//   keyStatus.style.color = '#666';
+//   reviewerKeyInput.style.border = '';
+//   reviewerKeyInput.style.background = '';
+//   reviewerKeyInput.value = '';
+//   // Reset key visibility to hidden
+//   reviewerKeyInput.type = 'password';
+//   keyVisible = false;
+//   toggleKeyVisibilityBtn.textContent = '👁️';
+// }
+
+// function toggleKeyVisibility() {
+//   keyVisible = !keyVisible;
+//   if (keyVisible) {
+//     reviewerKeyInput.type = 'text';
+//     toggleKeyVisibilityBtn.textContent = '🙈';
+//   } else {
+//     reviewerKeyInput.type = 'password';
+//     toggleKeyVisibilityBtn.textContent = '👁️';
+//   }
+// }
+
 function switchReviewer() {
   const selected = reviewerSelect.value;
   if (selected) {
     reviewerInput.value = selected;
+    // Reset key validation when switching reviewers
+    // resetKeyValidation();
     // Clear any existing reviewer-specific data display
     currentView = 'list';
     // Force complete re-render by clearing containers first
@@ -235,7 +320,9 @@ userSelect.addEventListener('change', () => {
 filterSelect.addEventListener('change', renderCards);
 showSummaryBtn.addEventListener('click', renderSummaryTable);
 addReviewerBtn.addEventListener('click', addReviewer);
+// validateKeyBtn.addEventListener('click', validateReviewerKey);
 reviewerSelect.addEventListener('change', switchReviewer);
+// toggleKeyVisibilityBtn.addEventListener('click', toggleKeyVisibility);
 
 // Highlight current reviewer in the dropdown and input
 function highlightCurrentReviewer() {
@@ -415,6 +502,7 @@ function renderCards() {
 function showDetail(res) {
   const reviewer = reviewerInput.value.trim();
   if (!reviewer) return alert('Please enter your name before reviewing.');
+  // if (!currentReviewerValidated) return alert('Please validate your reviewer key before reviewing.');
 
   currentView = 'detail';
   cardsContainer.innerHTML = '';
@@ -545,11 +633,21 @@ function showDetail(res) {
   
   otherReviews.innerHTML = reviewsHtml;
 
+  // Add OK button
+  const okButton = document.createElement('button');
+  okButton.className = 'ok-button';
+  okButton.textContent = 'OK';
+  okButton.onclick = () => {
+    currentView = 'list';
+    renderCards();
+  };
+
   detail.appendChild(name);
   detail.appendChild(qaBlock);
   detail.appendChild(statusButtons);
   detail.appendChild(commentBox);
   detail.appendChild(otherReviews);
+  detail.appendChild(okButton);
 
   cardsContainer.appendChild(backBtn);
   cardsContainer.appendChild(detail);
