@@ -8,19 +8,43 @@
 </head>
 <body>
   <header>
-    <input type="text" id="reviewer-name" placeholder="Enter your name (required)" />
-    <input type="file" id="file-input" accept=".xlsx,.csv" />
-    <input type="text" id="search" placeholder="Search by name" />
-    <select id="user-select">
-      <option value="">Select a user</option>
-    </select>
-    <select id="filter">
-      <option value="All">All</option>
-      <option value="Approved">✅ Approved</option>
-      <option value="Declined">❌ Declined</option>
-      <option value="Tentative">🔵 Tentative</option>
-    </select>
-    <button id="show-summary">📊 Show Summary Table</button>
+    <div class="reviewer-section">
+      <label for="reviewer-name">Reviewer:</label>
+      <input type="text" id="reviewer-name" placeholder="Enter your name (required)" />
+      <button id="add-reviewer">➕ Add Reviewer</button>
+    </div>
+    
+    <div class="reviewer-selector">
+      <label for="reviewer-select">Switch Reviewer:</label>
+      <select id="reviewer-select">
+        <option value="">Select a reviewer</option>
+      </select>
+    </div>
+
+    <div class="file-section">
+      <label for="file-input">Upload File:</label>
+      <input type="file" id="file-input" accept=".xlsx,.csv" />
+      <button id="load-file" disabled>📁 Load File</button>
+      <span id="file-status">No file selected</span>
+    </div>
+
+    <div class="controls-section">
+      <input type="text" id="search" placeholder="Search by name" />
+      <select id="user-select">
+        <option value="">Select a user</option>
+      </select>
+      <select id="filter">
+        <option value="All">All</option>
+        <option value="Green">🟢 Green</option>
+        <option value="Green to Blue">🟢➡️🔵 Green to Blue</option>
+        <option value="Blue to Green">🔵➡️🟢 Blue to Green</option>
+        <option value="Blue">🔵 Blue</option>
+        <option value="Blue to Black">🔵➡️⚫ Blue to Black</option>
+        <option value="Black to Blue">⚫➡️🔵 Black to Blue</option>
+        <option value="Black">⚫ Black</option>
+      </select>
+      <button id="show-summary">📊 Show Summary Table</button>
+    </div>
   </header>
   <div class="cards" id="cards"></div>
   <div id="summary" style="margin-top:2rem;"></div>

@@ -7,12 +7,52 @@ body {
 header {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 1rem;
   margin-bottom: 1rem;
+  background: white;
+  padding: 1rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+.reviewer-section, .reviewer-selector, .file-section, .controls-section {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.reviewer-section label, .reviewer-selector label, .file-section label {
+  font-weight: bold;
+  min-width: 80px;
+}
+#file-status {
+  color: #666;
+  font-style: italic;
+  margin-left: 0.5rem;
+}
+#load-file:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 input[type="file"], input[type="text"], select, button {
   padding: 0.5rem;
   font-size: 1rem;
+}
+button {
+  background: #2196F3;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+button:hover:not(:disabled) {
+  background: #1976D2;
+}
+#add-reviewer {
+  background: #4CAF50;
+}
+#add-reviewer:hover {
+  background: #388E3C;
 }
 .cards {
   display: flex;
@@ -44,6 +84,13 @@ input[type="file"], input[type="text"], select, button {
 .approve { background: #4CAF50; color: white; }
 .decline { background: #F44336; color: white; }
 .tentative { background: #2196F3; color: white; }
+.green { background: #4CAF50; color: white; }
+.green-to-blue { background: #66BB6A; color: white; }
+.blue-to-green { background: #42A5F5; color: white; }
+.blue { background: #2196F3; color: white; }
+.blue-to-black { background: #5C6BC0; color: white; }
+.black-to-blue { background: #3F51B5; color: white; }
+.black { background: #212121; color: white; }
 .comment-box {
   margin-top: 0.5rem;
   width: 100%;
@@ -93,6 +140,29 @@ input[type="file"], input[type="text"], select, button {
 }
 .summary-table th {
   background-color: #eee;
+}
+.qa-category {
+  margin-top: 1rem;
+  padding: 0.5rem;
+  background: #f5f7fa;
+  border-radius: 6px;
+  border-left: 4px solid #b0bec5;
+}
+.qa-category h4 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.1rem;
+  color: #37474f;
+}
+.qa-subcategory {
+  margin-left: 1rem;
+  margin-bottom: 0.5rem;
+  padding-left: 0.5rem;
+  border-left: 2px solid #90a4ae;
+}
+.qa-subcategory h5 {
+  margin: 0 0 0.3rem 0;
+  font-size: 1rem;
+  color: #607d8b;
 }
 @media (min-width: 600px) {
   .cards {

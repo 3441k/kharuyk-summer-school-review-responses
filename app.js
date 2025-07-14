@@ -1,5 +1,9 @@
 const reviewerInput = document.getElementById('reviewer-name');
+const reviewerSelect = document.getElementById('reviewer-select');
+const addReviewerBtn = document.getElementById('add-reviewer');
 const fileInput = document.getElementById('file-input');
+const loadFileBtn = document.getElementById('load-file');
+const fileStatus = document.getElementById('file-status');
 const searchInput = document.getElementById('search');
 const userSelect = document.getElementById('user-select');
 const filterSelect = document.getElementById('filter');
@@ -10,20 +14,206 @@ const showSummaryBtn = document.getElementById('show-summary');
 let responses = [];
 let currentView = 'list';
 let ratings = JSON.parse(localStorage.getItem('ratings_v1') || '{}');
+let reviewers = JSON.parse(localStorage.getItem('reviewers') || '[]');
+let selectedFile = null;
 
 window.addEventListener('DOMContentLoaded', () => {
+  loadReviewers();
   if (!fileInput.files.length) {
     loadDefaultFile();
   }
 });
 
+function loadReviewers() {
+  reviewerSelect.innerHTML = '<option value="">Select a reviewer</option>';
+  reviewers.forEach(reviewer => {
+    const option = document.createElement('option');
+    option.value = reviewer;
+    option.textContent = reviewer;
+    reviewerSelect.appendChild(option);
+  });
+}
+
+function addReviewer() {
+  const name = reviewerInput.value.trim();
+  if (!name) {
+    alert('Please enter a reviewer name');
+    return;
+  }
+  if (!reviewers.includes(name)) {
+    reviewers.push(name);
+    localStorage.setItem('reviewers', JSON.stringify(reviewers));
+    loadReviewers();
+    reviewerInput.value = '';
+    highlightCurrentReviewer();
+  } else {
+    alert('Reviewer already exists');
+  }
+}
+
+function switchReviewer() {
+  const selected = reviewerSelect.value;
+  if (selected) {
+    reviewerInput.value = selected;
+    // Clear any existing reviewer-specific data display
+    currentView = 'list';
+    // Force complete re-render by clearing containers first
+    cardsContainer.innerHTML = '';
+    summaryDiv.innerHTML = '';
+    // Use setTimeout to ensure DOM updates before re-rendering
+    setTimeout(() => {
+      renderCards();
+      highlightCurrentReviewer();
+    }, 10);
+  }
+}
+
+function handleFileSelect() {
+  const file = fileInput.files[0];
+  if (file) {
+    selectedFile = file;
+    fileStatus.textContent = `Selected: ${file.name}`;
+    loadFileBtn.disabled = false;
+  } else {
+    selectedFile = null;
+    fileStatus.textContent = 'No file selected';
+    loadFileBtn.disabled = true;
+  }
+}
+
+function loadSelectedFile() {
+  if (!selectedFile) {
+    alert('Please select a file first');
+    return;
+  }
+  
+  const reader = new FileReader();
+  reader.onload = function (e) {
+    const data = new Uint8Array(e.target.result);
+    const workbook = XLSX.read(data, { type: 'array' });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const parsed = parseSheetWithHeaders(sheet);
+    responses = parsed.responses;
+    window._questionHeaders = parsed.questionHeaders;
+    window._colMeta = parsed.colMeta;
+    populateUserSelect();
+    renderCards();
+    fileStatus.textContent = `Loaded: ${selectedFile.name}`;
+  };
+  reader.readAsArrayBuffer(selectedFile);
+}
+
+function parseSheetWithHeaders(sheet) {
+  // Get merges info from SheetJS
+  const merges = sheet['!merges'] || [];
+  // Get the range of the sheet
+  const ref = sheet['!ref'];
+  if (!ref) return { responses: [], columns: [] };
+  const [start, end] = ref.split(':');
+  const startCol = start.replace(/\d+/g, '');
+  const startRow = parseInt(start.replace(/\D+/g, ''));
+  const endCol = end.replace(/\d+/g, '');
+  const endRow = parseInt(end.replace(/\D+/g, ''));
+
+  // Helper to convert col number to letter and vice versa
+  function colToNum(col) {
+    let num = 0;
+    for (let i = 0; i < col.length; i++) {
+      num = num * 26 + (col.charCodeAt(i) - 64);
+    }
+    return num;
+  }
+  function numToCol(num) {
+    let col = '';
+    while (num > 0) {
+      let rem = (num - 1) % 26;
+      col = String.fromCharCode(65 + rem) + col;
+      num = Math.floor((num - 1) / 26);
+    }
+    return col;
+  }
+
+  // Build column list
+  const columns = [];
+  for (let c = colToNum(startCol); c <= colToNum(endCol); c++) {
+    columns.push(numToCol(c));
+  }
+
+  // Parse categories and subcategories
+  const categoryRow = startRow;
+  const subcategoryRow = startRow + 1;
+  const colMeta = {};
+  
+  // Initialize colMeta for all columns
+  columns.forEach(col => {
+    colMeta[col] = {
+      category: '',
+      subcategory: ''
+    };
+  });
+
+  // Fill in category and subcategory values
+  columns.forEach(col => {
+    const catCell = sheet[col + categoryRow];
+    const subcatCell = sheet[col + subcategoryRow];
+    if (catCell) colMeta[col].category = catCell.v;
+    if (subcatCell) colMeta[col].subcategory = subcatCell.v;
+  });
+
+  // Apply merges to fill down category/subcategory
+  merges.forEach(m => {
+    if (m.s.r === categoryRow - 1) { // category row
+      const sourceCol = numToCol(m.s.c + 1);
+      const val = sheet[sourceCol + categoryRow]?.v || '';
+      for (let c = m.s.c + 1; c <= m.e.c + 1; c++) {
+        const targetCol = numToCol(c);
+        if (colMeta[targetCol]) {
+          colMeta[targetCol].category = val;
+        }
+      }
+    }
+    if (m.s.r === subcategoryRow - 1) { // subcategory row
+      const sourceCol = numToCol(m.s.c + 1);
+      const val = sheet[sourceCol + subcategoryRow]?.v || '';
+      for (let c = m.s.c + 1; c <= m.e.c + 1; c++) {
+        const targetCol = numToCol(c);
+        if (colMeta[targetCol]) {
+          colMeta[targetCol].subcategory = val;
+        }
+      }
+    }
+  });
+
+  // Parse responses (from row 3 onward)
+  const data = XLSX.utils.sheet_to_json(sheet, { header: 1, range: startRow + 1 });
+  // First row in data is header (question names)
+  const questionHeaders = data[0];
+  const responses = data.slice(1).map(row => {
+    const obj = {};
+    row.forEach((val, idx) => {
+      const col = columns[idx];
+      const meta = colMeta[col] || { category: '', subcategory: '' };
+      obj[questionHeaders[idx]] = {
+        value: val,
+        category: meta.category || '',
+        subcategory: meta.subcategory || ''
+      };
+    });
+    return obj;
+  });
+  return { responses, questionHeaders, colMeta };
+}
+
 function loadDefaultFile() {
-  fetch('data/example.xlsx')
+  fetch('data/test_table.xlsx')
     .then(res => res.arrayBuffer())
     .then(data => {
       const workbook = XLSX.read(data, { type: 'array' });
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      responses = XLSX.utils.sheet_to_json(sheet);
+      const parsed = parseSheetWithHeaders(sheet);
+      responses = parsed.responses;
+      window._questionHeaders = parsed.questionHeaders;
+      window._colMeta = parsed.colMeta;
       populateUserSelect();
       renderCards();
     })
@@ -32,7 +222,8 @@ function loadDefaultFile() {
 
 
 
-fileInput.addEventListener('change', handleFile);
+fileInput.addEventListener('change', handleFileSelect);
+loadFileBtn.addEventListener('click', loadSelectedFile);
 searchInput.addEventListener('input', () => {
   userSelect.value = '';
   renderCards();
@@ -43,24 +234,55 @@ userSelect.addEventListener('change', () => {
 });
 filterSelect.addEventListener('change', renderCards);
 showSummaryBtn.addEventListener('click', renderSummaryTable);
+addReviewerBtn.addEventListener('click', addReviewer);
+reviewerSelect.addEventListener('change', switchReviewer);
 
+// Highlight current reviewer in the dropdown and input
+function highlightCurrentReviewer() {
+  const current = reviewerInput.value.trim();
+  // Highlight in dropdown
+  Array.from(reviewerSelect.options).forEach(opt => {
+    if (opt.value === current) {
+      opt.style.background = '#2196F3';
+      opt.style.color = 'white';
+      opt.style.fontWeight = 'bold';
+    } else {
+      opt.style.background = '';
+      opt.style.color = '';
+      opt.style.fontWeight = '';
+    }
+  });
+  // Highlight input
+  if (current) {
+    reviewerInput.style.background = '#E3F2FD';
+    reviewerInput.style.border = '2px solid #2196F3';
+    reviewerInput.style.fontWeight = 'bold';
+  } else {
+    reviewerInput.style.background = '';
+    reviewerInput.style.border = '';
+    reviewerInput.style.fontWeight = '';
+  }
+}
+
+// Call highlight on relevant events
+reviewerInput.addEventListener('input', highlightCurrentReviewer);
+reviewerSelect.addEventListener('change', highlightCurrentReviewer);
+document.addEventListener('DOMContentLoaded', highlightCurrentReviewer);
+
+// Legacy function - kept for backward compatibility
 function handleFile(e) {
   const file = e.target.files[0];
-  const reader = new FileReader();
-  reader.onload = function (e) {
-    const data = new Uint8Array(e.target.result);
-    const workbook = XLSX.read(data, { type: 'array' });
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    responses = XLSX.utils.sheet_to_json(sheet);
-    populateUserSelect();
-    renderCards();
-  };
-  reader.readAsArrayBuffer(file);
+  if (file) {
+    selectedFile = file;
+    fileStatus.textContent = `Selected: ${file.name}`;
+    loadFileBtn.disabled = false;
+    loadSelectedFile();
+  }
 }
 
 function populateUserSelect() {
   userSelect.innerHTML = '<option value="">Select a user</option>';
-  const names = Array.from(new Set(responses.map(r => r.Name).filter(Boolean)));
+  const names = Array.from(new Set(responses.map(r => r['Name']?.value || r['Name']).filter(Boolean)));
   names.sort().forEach(name => {
     const option = document.createElement('option');
     option.value = name;
@@ -70,7 +292,8 @@ function populateUserSelect() {
 }
 
 function getResponseId(res) {
-  return res.Name;
+  // Handle both old format (res.Name) and new format (res.Name.value)
+  return res.Name?.value || res.Name;
 }
 
 function saveRatings() {
@@ -85,7 +308,8 @@ function renderCards() {
   cardsContainer.innerHTML = '';
 
   responses.filter(res => {
-    const nameMatch = res.Name?.toLowerCase().includes(searchVal);
+    const name = res['Name']?.value || res['Name'];
+    const nameMatch = name?.toLowerCase().includes(searchVal);
     const allRatings = ratings[getResponseId(res)] || {};
     const reviewerRatings = Object.values(allRatings);
     const statusMatch = filterVal === 'All' || reviewerRatings.some(r => r.status === filterVal);
@@ -97,24 +321,72 @@ function renderCards() {
     const allRatings = ratings[getResponseId(res)] || {};
     const reviewer = reviewerInput.value.trim();
     const reviewerRating = allRatings[reviewer];
-    const latest = reviewerRating || Object.values(allRatings).slice(-1)[0];
 
-    if (latest?.status === 'Approved') card.style.borderLeftColor = '#4CAF50';
-    else if (latest?.status === 'Declined') card.style.borderLeftColor = '#F44336';
-    else if (latest?.status === 'Tentative') card.style.borderLeftColor = '#2196F3';
-    else card.style.borderLeftColor = '#ccc';
+    // Only use current reviewer's rating for border color, no fallback to other reviewers
+    if (reviewerRating?.status === 'Green') {
+      card.style.borderLeftColor = '#4CAF50';
+    }
+    else if (reviewerRating?.status === 'Green to Blue') {
+      card.style.borderLeftColor = '#66BB6A';
+    }
+    else if (reviewerRating?.status === 'Blue to Green') {
+      card.style.borderLeftColor = '#42A5F5';
+    }
+    else if (reviewerRating?.status === 'Blue') {
+      card.style.borderLeftColor = '#2196F3';
+    }
+    else if (reviewerRating?.status === 'Blue to Black') {
+      card.style.borderLeftColor = '#5C6BC0';
+    }
+    else if (reviewerRating?.status === 'Black to Blue') {
+      card.style.borderLeftColor = '#3F51B5';
+    }
+    else if (reviewerRating?.status === 'Black') {
+      card.style.borderLeftColor = '#212121';
+    }
+    else {
+      card.style.borderLeftColor = '#ccc';
+    }
 
     const name = document.createElement('h3');
-    name.textContent = res.Name || `Respondent ${idx + 1}`;
+    name.textContent = res['Name']?.value || res['Name'] || `Respondent ${idx + 1}`;
 
+    // Group Q&A by category and subcategory
     const qaBlock = document.createElement('div');
+    const grouped = {};
     Object.entries(res).forEach(([key, val]) => {
-      if (key !== 'Name') {
-        const qa = document.createElement('p');
-        qa.className = 'qa';
-        qa.innerHTML = `<strong>${key}:</strong> ${val}`;
-        qaBlock.appendChild(qa);
+      if (key === 'Name') return;
+      const cat = val.category || '';
+      const subcat = val.subcategory || '';
+      grouped[cat] = grouped[cat] || {};
+      grouped[cat][subcat] = grouped[cat][subcat] || [];
+      grouped[cat][subcat].push({ question: key, answer: val.value });
+    });
+    Object.entries(grouped).forEach(([cat, subcats]) => {
+      const catDiv = document.createElement('div');
+      catDiv.className = 'qa-category';
+      if (cat) {
+        const catTitle = document.createElement('h4');
+        catTitle.textContent = cat;
+        catDiv.appendChild(catTitle);
       }
+      Object.entries(subcats).forEach(([subcat, qas]) => {
+        const subcatDiv = document.createElement('div');
+        subcatDiv.className = 'qa-subcategory';
+        if (subcat) {
+          const subcatTitle = document.createElement('h5');
+          subcatTitle.textContent = subcat;
+          subcatDiv.appendChild(subcatTitle);
+        }
+        qas.forEach(({ question, answer }) => {
+          const qa = document.createElement('p');
+          qa.className = 'qa';
+          qa.innerHTML = `<strong>${question}:</strong> ${answer}`;
+          subcatDiv.appendChild(qa);
+        });
+        catDiv.appendChild(subcatDiv);
+      });
+      qaBlock.appendChild(catDiv);
     });
 
     card.appendChild(name);
@@ -124,6 +396,13 @@ function renderCards() {
       badge.style.marginTop = '4px';
       badge.style.color = '#666';
       badge.textContent = `Your rating: ${allRatings[reviewer].status || '—'}`;
+      card.appendChild(badge);
+    } else if (reviewer) {
+      const badge = document.createElement('div');
+      badge.style.fontSize = '0.85rem';
+      badge.style.marginTop = '4px';
+      badge.style.color = '#999';
+      badge.textContent = `No rating yet`;
       card.appendChild(badge);
     }
     card.appendChild(qaBlock);
@@ -152,24 +431,62 @@ function showDetail(res) {
   const detail = document.createElement('div');
   detail.className = 'detail-view';
   const name = document.createElement('h2');
-  name.textContent = res.Name;
+  name.textContent = res['Name']?.value || res['Name'];
 
+  // Group Q&A by category and subcategory
   const qaBlock = document.createElement('div');
+  const grouped = {};
   Object.entries(res).forEach(([key, val]) => {
-    if (key !== 'Name') {
-      const qa = document.createElement('p');
-      qa.className = 'qa';
-      qa.innerHTML = `<strong>${key}:</strong> ${val}`;
-      qaBlock.appendChild(qa);
+    if (key === 'Name') return;
+    const cat = val.category || '';
+    const subcat = val.subcategory || '';
+    grouped[cat] = grouped[cat] || {};
+    grouped[cat][subcat] = grouped[cat][subcat] || [];
+    grouped[cat][subcat].push({ question: key, answer: val.value });
+  });
+  Object.entries(grouped).forEach(([cat, subcats]) => {
+    const catDiv = document.createElement('div');
+    catDiv.className = 'qa-category';
+    if (cat) {
+      const catTitle = document.createElement('h4');
+      catTitle.textContent = cat;
+      catDiv.appendChild(catTitle);
     }
+    Object.entries(subcats).forEach(([subcat, qas]) => {
+      const subcatDiv = document.createElement('div');
+      subcatDiv.className = 'qa-subcategory';
+      if (subcat) {
+        const subcatTitle = document.createElement('h5');
+        subcatTitle.textContent = subcat;
+        subcatDiv.appendChild(subcatTitle);
+      }
+      qas.forEach(({ question, answer }) => {
+        const qa = document.createElement('p');
+        qa.className = 'qa';
+        qa.innerHTML = `<strong>${question}:</strong> ${answer}`;
+        subcatDiv.appendChild(qa);
+      });
+      catDiv.appendChild(subcatDiv);
+    });
+    qaBlock.appendChild(catDiv);
   });
 
   const statusButtons = document.createElement('div');
   statusButtons.className = 'status-buttons';
-  ['Approved', 'Declined', 'Tentative'].forEach(status => {
+  const categories = [
+    'Green',
+    'Green to Blue', 
+    'Blue to Green',
+    'Blue',
+    'Blue to Black',
+    'Black to Blue',
+    'Black'
+  ];
+  
+  categories.forEach(status => {
     const btn = document.createElement('button');
-    btn.textContent = status === 'Approved' ? '✅' : status === 'Declined' ? '❌' : '🔵';
-    btn.className = status.toLowerCase();
+    btn.textContent = status;
+    btn.className = status.toLowerCase().replace(/\s+/g, '-');
     btn.onclick = () => {
       const id = getResponseId(res);
       ratings[id] = ratings[id] || {};
@@ -206,10 +523,27 @@ function showDetail(res) {
   const otherReviews = document.createElement('div');
   otherReviews.className = 'reviewer-info';
   const all = ratings[getResponseId(res)] || {};
-  otherReviews.innerHTML = '<strong>All Reviews:</strong><br>' +
-    Object.entries(all).map(([rev, info]) =>
-      `<div><strong>${rev}</strong>: ${info.status || 'No status'}<br>📝 ${info.comment || ''}</div>`
-    ).join('<hr>');
+  const currentReviewer = reviewerInput.value.trim();
+  
+  // Show current reviewer's review first, then others
+  let reviewsHtml = '<strong>All Reviews:</strong><br>';
+  
+  // Show current reviewer's review first
+  if (all[currentReviewer]) {
+    reviewsHtml += `<div style="background: #E3F2FD; padding: 0.5rem; border-radius: 4px; margin-bottom: 0.5rem;">
+      <strong>${currentReviewer} (You):</strong> ${all[currentReviewer].status || 'No status'}<br>
+      📝 ${all[currentReviewer].comment || ''}
+    </div>`;
+  }
+  
+  // Show other reviewers' reviews
+  Object.entries(all).forEach(([rev, info]) => {
+    if (rev !== currentReviewer) {
+      reviewsHtml += `<div><strong>${rev}:</strong> ${info.status || 'No status'}<br>📝 ${info.comment || ''}</div><hr>`;
+    }
+  });
+  
+  otherReviews.innerHTML = reviewsHtml;
 
   detail.appendChild(name);
   detail.appendChild(qaBlock);
@@ -241,7 +575,8 @@ function renderSummaryTable() {
 
   responses.forEach(res => {
     const id = getResponseId(res);
-    html += `<tr><td>${res.Name}</td>`;
+    const name = res['Name']?.value || res['Name'] || 'Unknown';
+    html += `<tr><td>${name}</td>`;
     reviewers.forEach(reviewer => {
       const review = ratings[id]?.[reviewer] || {};
       html += `<td>${review.status || ''}</td><td>${review.comment || ''}</td>`;
