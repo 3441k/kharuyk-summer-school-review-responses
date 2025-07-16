@@ -8,12 +8,17 @@ const addReviewerBtn = document.getElementById('add-reviewer');
 const fileInput = document.getElementById('file-input');
 const loadFileBtn = document.getElementById('load-file');
 const fileStatus = document.getElementById('file-status');
+// const selectFolderBtn = document.getElementById('select-folder');
+// const outputStatus = document.getElementById('output-status');
 const searchInput = document.getElementById('search');
 const userSelect = document.getElementById('user-select');
 const filterSelect = document.getElementById('filter');
 const cardsContainer = document.getElementById('cards');
 const summaryDiv = document.getElementById('summary');
 const showSummaryBtn = document.getElementById('show-summary');
+const exportReviewsBtn = document.getElementById('export-reviews');
+let reviewFolderHandle = null;
+let reviewerFolderMap = {};
 
 let responses = [];
 let currentView = 'list';
@@ -21,18 +26,45 @@ let ratings = JSON.parse(localStorage.getItem('ratings_v1') || '{}');
 let reviewers = JSON.parse(localStorage.getItem('reviewers') || '[]');
 // let reviewerKeys = JSON.parse(localStorage.getItem('reviewer_keys') || '{}');
 let selectedFile = null;
+// let selectedFolderHandle = null;
+// let outputFileName = 'review_data.json';
 // let currentReviewerValidated = false;
 // let keyVisible = false;
+
+// Predefined reviewers
+const predefinedReviewers = [
+  { name: 'Alice', canAdd: true, key: 'alice123' },
+  { name: 'Bob', canAdd: true, key: 'bob456' },
+  { name: 'Charlie', canAdd: false, key: 'charlie789' },
+  { name: 'Dana', canAdd: false, key: 'dana321' }
+];
+
+// On load, use predefined reviewers if not already in localStorage
+if (!localStorage.getItem('reviewers')) {
+  localStorage.setItem('reviewers', JSON.stringify(predefinedReviewers.map(r => r.name)));
+}
+if (!localStorage.getItem('reviewer_permissions')) {
+  localStorage.setItem('reviewer_permissions', JSON.stringify(Object.fromEntries(predefinedReviewers.map(r => [r.name, r.canAdd]))));
+}
+if (!localStorage.getItem('reviewer_keys')) {
+  localStorage.setItem('reviewer_keys', JSON.stringify(Object.fromEntries(predefinedReviewers.map(r => [r.name, r.key]))));
+}
+
+let reviewerPermissions = JSON.parse(localStorage.getItem('reviewer_permissions'));
+let reviewerKeys = JSON.parse(localStorage.getItem('reviewer_keys'));
+let validatedReviewer = null;
 
 window.addEventListener('DOMContentLoaded', () => {
   loadReviewers();
   if (!fileInput.files.length) {
     loadDefaultFile();
   }
+  updateAddReviewerUI(); // Initial call to set the correct state on load
 });
 
 function loadReviewers() {
   reviewerSelect.innerHTML = '<option value="">Select a reviewer</option>';
+  reviewers = JSON.parse(localStorage.getItem('reviewers') || '[]');
   reviewers.forEach(reviewer => {
     const option = document.createElement('option');
     option.value = reviewer;
@@ -40,6 +72,23 @@ function loadReviewers() {
     reviewerSelect.appendChild(option);
   });
 }
+
+function canCurrentReviewerAdd() {
+  const reviewer = reviewerSelect.value;
+  return reviewer && reviewerPermissions[reviewer];
+}
+
+function updateAddReviewerUI() {
+  const addSection = document.getElementById('add-reviewer-section');
+  if (canCurrentReviewerAdd()) {
+    addSection.style.display = '';
+  } else {
+    addSection.style.display = 'none';
+  }
+}
+
+document.addEventListener('DOMContentLoaded', updateAddReviewerUI);
+reviewerInput.addEventListener('input', updateAddReviewerUI);
 
 function addReviewer() {
   const name = reviewerInput.value.trim();
@@ -134,18 +183,55 @@ function addReviewer() {
 //   }
 // }
 
+// Remove folder modal logic and use File System Access API directly
+async function showFolderModalAndWait() {
+  await selectReviewFolder();
+}
+
+// Remove any modal-related variables for folder selection (folderModal, modalSelectFolderBtn)
+// (No further code needed for folder modal)
+
+const keyModal = document.getElementById('key-modal');
+const keyModalInput = document.getElementById('key-modal-input');
+const keyModalSubmit = document.getElementById('key-modal-submit');
+const keyModalError = document.getElementById('key-modal-error');
+const keyModalLabel = document.getElementById('key-modal-label');
+
+function showKeyModalAndWait(selectedReviewer) {
+  return new Promise((resolve) => {
+    keyModalInput.value = '';
+    keyModalError.style.display = 'none';
+    keyModalLabel.textContent = `Please enter the key for reviewer: ${selectedReviewer}`;
+    keyModal.style.display = 'flex';
+    function onSubmit() {
+      const key = keyModalInput.value;
+      if (!key || key !== reviewerKeys[selectedReviewer]) {
+        keyModalError.textContent = 'Invalid key. Please try again.';
+        keyModalError.style.display = 'block';
+        return;
+      }
+      keyModalSubmit.removeEventListener('click', onSubmit);
+      keyModal.style.display = 'none';
+      resolve(true);
+    }
+    keyModalSubmit.addEventListener('click', onSubmit);
+    keyModalInput.addEventListener('keydown', function handler(e) {
+      if (e.key === 'Enter') {
+        onSubmit();
+        keyModalInput.removeEventListener('keydown', handler);
+      }
+    });
+  });
+}
+
 function switchReviewer() {
   const selected = reviewerSelect.value;
   if (selected) {
     reviewerInput.value = selected;
-    // Reset key validation when switching reviewers
-    // resetKeyValidation();
     // Clear any existing reviewer-specific data display
     currentView = 'list';
-    // Force complete re-render by clearing containers first
     cardsContainer.innerHTML = '';
     summaryDiv.innerHTML = '';
-    // Use setTimeout to ensure DOM updates before re-rendering
     setTimeout(() => {
       renderCards();
       highlightCurrentReviewer();
@@ -309,6 +395,7 @@ function loadDefaultFile() {
 
 fileInput.addEventListener('change', handleFileSelect);
 loadFileBtn.addEventListener('click', loadSelectedFile);
+// selectFolderBtn.addEventListener('click', selectFolder);
 searchInput.addEventListener('input', () => {
   userSelect.value = '';
   renderCards();
@@ -323,6 +410,112 @@ addReviewerBtn.addEventListener('click', addReviewer);
 // validateKeyBtn.addEventListener('click', validateReviewerKey);
 reviewerSelect.addEventListener('change', switchReviewer);
 // toggleKeyVisibilityBtn.addEventListener('click', toggleKeyVisibility);
+
+// Helper: Generate a simple hash for a string (for id)
+function hashString(str) {
+  let hash = 0, i, chr;
+  if (str.length === 0) return hash;
+  for (i = 0; i < str.length; i++) {
+    chr = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + chr;
+    hash |= 0; // Convert to 32bit integer
+  }
+  return Math.abs(hash);
+}
+
+async function selectReviewFolder() {
+  if ('showDirectoryPicker' in window) {
+    try {
+      reviewFolderHandle = await window.showDirectoryPicker();
+      alert('Review save folder selected!');
+    } catch (e) {
+      alert('Folder selection cancelled. Reviews will not be saved to disk.');
+    }
+  } else {
+    alert('Folder selection is not supported in this browser. Please use a modern browser like Chrome or Edge.');
+  }
+}
+
+async function saveReviewerDataLive() {
+  if (!reviewFolderHandle) return;
+  const reviewer = reviewerInput.value.trim();
+  if (!reviewer) return;
+  // Collect review data for this reviewer only
+  const data = [];
+  responses.forEach(res => {
+    const id = hashString(res['Name']?.value || res['Name'] || '');
+    const name = res['Name']?.value || res['Name'] || '';
+    const review = ratings[getResponseId(res)]?.[reviewer];
+    if (name && review) {
+      data.push({
+        id,
+        name,
+        mark: review.status || '',
+        comment: review.comment || ''
+      });
+    }
+  });
+  // Save to file
+  try {
+    const fileHandle = await reviewFolderHandle.getFileHandle(`${reviewer}.json`, { create: true });
+    const writable = await fileHandle.createWritable();
+    await writable.write(JSON.stringify(data, null, 2));
+    await writable.close();
+    // Optionally: console.log(`Saved ${reviewer}.json`);
+  } catch (e) {
+    // Optionally: console.error('Error saving reviewer file:', e);
+  }
+}
+
+// Patch saveRatings to also save reviewer data live
+const originalSaveRatings = saveRatings;
+function saveRatings() {
+  localStorage.setItem('ratings_v1', JSON.stringify(ratings));
+  saveReviewerDataLive();
+}
+
+// Define switchReviewer as a single async function
+async function switchReviewer() {
+  console.log('switchReviewer');
+  const selected = reviewerSelect.value;
+  if (selected) {
+    // First, show key prompt if not validated this session
+    console.log('validatedReviewer', validatedReviewer);
+    console.log('selected', selected);
+    if (validatedReviewer !== selected) {
+      let key = prompt(`Please enter the key for reviewer: ${selected}`);
+      if (!key || key !== reviewerKeys[selected]) {
+        alert('Invalid key. Please try again.');
+        reviewerInput.value = '';
+        reviewerSelect.value = '';
+        updateAddReviewerUI();
+        return;
+      }
+      validatedReviewer = selected;
+    }
+    // Then, if no folder, require folder selection
+    if (!reviewFolderHandle) {
+      await showFolderModalAndWait();
+      if (!reviewFolderHandle) return; // User cancelled
+    }
+    reviewerInput.value = selected;
+    updateAddReviewerUI();
+    // Clear any existing reviewer-specific data display
+    currentView = 'list';
+    cardsContainer.innerHTML = '';
+    summaryDiv.innerHTML = '';
+    setTimeout(() => {
+      renderCards();
+      highlightCurrentReviewer();
+    }, 10);
+  }
+}
+
+// Remove any previous event listeners and attach the correct one
+// (No need to replace the element! Just ensure listeners are attached once)
+reviewerSelect.addEventListener('change', switchReviewer);
+reviewerSelect.addEventListener('change', updateAddReviewerUI);
+reviewerSelect.addEventListener('change', highlightCurrentReviewer);
 
 // Highlight current reviewer in the dropdown and input
 function highlightCurrentReviewer() {
@@ -381,10 +574,6 @@ function populateUserSelect() {
 function getResponseId(res) {
   // Handle both old format (res.Name) and new format (res.Name.value)
   return res.Name?.value || res.Name;
-}
-
-function saveRatings() {
-  localStorage.setItem('ratings_v1', JSON.stringify(ratings));
 }
 
 function renderCards() {
@@ -691,4 +880,76 @@ function renderSummaryTable() {
     renderCards();
   });
 }
+
+function exportReviews() {
+  if (Object.keys(ratings).length === 0) {
+    alert('No review data to export. Please add some reviews first.');
+    return;
+  }
+
+  // Get all unique reviewers
+  const allReviewers = new Set();
+  Object.values(ratings).forEach(responseReviews => {
+    Object.keys(responseReviews).forEach(reviewerName => allReviewers.add(reviewerName));
+  });
+  const reviewers = Array.from(allReviewers).sort();
+
+  // Create CSV content
+  let csvContent = 'Respondent Name,';
+  reviewers.forEach(reviewer => {
+    csvContent += `${reviewer} - Status,${reviewer} - Comment,`;
+  });
+  csvContent = csvContent.slice(0, -1) + '\n';
+
+  // Add data rows
+  responses.forEach(res => {
+    const name = res['Name']?.value || res['Name'] || 'Unknown';
+    csvContent += `"${name}",`;
+    reviewers.forEach(reviewer => {
+      const review = ratings[name]?.[reviewer] || {};
+      csvContent += `"${review.status || ''}","${review.comment || ''}",`;
+    });
+    csvContent = csvContent.slice(0, -1) + '\n';
+  });
+
+  // Create JSON content
+  const jsonData = {
+    exportDate: new Date().toISOString(),
+    totalResponses: responses.length,
+    totalReviewers: reviewers.length,
+    reviewers: reviewers,
+    reviews: ratings,
+    responses: responses.map(res => ({
+      name: res['Name']?.value || res['Name'] || 'Unknown',
+      data: res
+    }))
+  };
+
+  // Create download links
+  const csvBlob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const jsonBlob = new Blob([JSON.stringify(jsonData, null, 2)], { type: 'application/json;charset=utf-8;' });
+  
+  const csvLink = document.createElement('a');
+  const jsonLink = document.createElement('a');
+  
+  csvLink.href = URL.createObjectURL(csvBlob);
+  jsonLink.href = URL.createObjectURL(jsonBlob);
+  
+  const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+  csvLink.download = `review_data_${timestamp}.csv`;
+  jsonLink.download = `review_data_${timestamp}.json`;
+  
+  // Trigger downloads
+  document.body.appendChild(csvLink);
+  document.body.appendChild(jsonLink);
+  csvLink.click();
+  jsonLink.click();
+  document.body.removeChild(csvLink);
+  document.body.removeChild(jsonLink);
+  
+  alert(`Review data exported successfully!\n\nFiles downloaded:\n- review_data_${timestamp}.csv\n- review_data_${timestamp}.json`);
+}
+
+// Add event listener for export button
+exportReviewsBtn.addEventListener('click', exportReviews);
 

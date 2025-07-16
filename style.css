@@ -30,6 +30,16 @@ header {
   border-radius: 6px;
   border: 1px solid #e9ecef;
 }
+.output-file-section {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  padding: 0.5rem;
+  background: #fff3e0;
+  border-radius: 6px;
+  border: 1px solid #ffcc02;
+}
 .password-field {
   position: relative;
   display: flex;
@@ -52,11 +62,11 @@ header {
 .eye-button:hover {
   background: rgba(0, 0, 0, 0.1);
 }
-.reviewer-section label, .reviewer-selector label, .file-section label, .reviewer-key-section label {
+.reviewer-section label, .reviewer-selector label, .file-section label, .reviewer-key-section label, .output-file-section label {
   font-weight: bold;
   min-width: 80px;
 }
-#file-status, #key-status {
+#file-status, #key-status, #output-status {
   color: #666;
   font-style: italic;
   margin-left: 0.5rem;
@@ -88,6 +98,12 @@ button:hover:not(:disabled) {
 }
 #add-reviewer:hover {
   background: #388E3C;
+}
+#export-reviews {
+  background: #FF9800;
+}
+#export-reviews:hover {
+  background: #F57C00;
 }
 .cards {
   display: flex;

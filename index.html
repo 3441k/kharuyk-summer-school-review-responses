@@ -8,7 +8,7 @@
 </head>
 <body>
   <header>
-    <div class="reviewer-section">
+    <div class="reviewer-section" id="add-reviewer-section">
       <label for="reviewer-name">Reviewer:</label>
       <input type="text" id="reviewer-name" placeholder="Enter your name (required)" />
       <button id="add-reviewer">➕ Add Reviewer</button>
@@ -39,6 +39,7 @@
       <button id="load-file" disabled>📁 Load File</button>
       <span id="file-status">No file selected</span>
     </div>
+    <!-- Output folder selection removed -->
 
     <div class="controls-section">
       <input type="text" id="search" placeholder="Search by name" />
@@ -56,6 +57,7 @@
         <option value="Black">⚫ Black</option>
       </select>
       <button id="show-summary">📊 Show Summary Table</button>
+      <button id="export-reviews">💾 Export Reviews</button>
     </div>
   </header>
   <div class="cards" id="cards"></div>
@@ -63,6 +65,23 @@
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="app.js"></script>
+  <div id="folder-modal" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.4); z-index:1000; align-items:center; justify-content:center;">
+      <div style="background:white; padding:2rem; border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,0.2); text-align:center; max-width:90vw;">
+        <h2>Select a Folder to Save Reviews</h2>
+        <p>This is required for live saving of your reviews. You only need to do this once per session.</p>
+        <button id="modal-select-folder" style="font-size:1.2rem; padding:0.7rem 2rem; background:#2196F3; color:white; border:none; border-radius:5px; cursor:pointer;">Select Folder</button>
+      </div>
+    </div>
+    <!-- Reviewer Key Modal -->
+<div id="key-modal" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.4); align-items:center; justify-content:center; z-index:1000;">
+  <div style="background:white; padding:2rem; border-radius:8px; min-width:300px; box-shadow:0 2px 16px rgba(0,0,0,0.2); display:flex; flex-direction:column; gap:1rem; align-items:stretch;">
+    <label id="key-modal-label" for="key-modal-input" style="font-weight:bold;"></label>
+    <input id="key-modal-input" type="password" autocomplete="off" style="padding:0.5rem; font-size:1rem;" />
+    <div id="key-modal-error" style="display:none; color:#d32f2f; font-size:0.95rem;"></div>
+    <button id="key-modal-submit" style="padding:0.5rem; font-size:1rem; background:#1976d2; color:white; border:none; border-radius:4px; cursor:pointer;">Submit</button>
+  </div>
+</div>
+
 </body>
 </html>
 
