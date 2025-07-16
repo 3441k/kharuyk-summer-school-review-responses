@@ -443,8 +443,8 @@ async function saveReviewerDataLive() {
   // Collect review data for this reviewer only
   const data = [];
   responses.forEach(res => {
-    const id = hashString(res['Name']?.value || res['Name'] || '');
-    const name = res['Name']?.value || res['Name'] || '';
+    const id = hashString(getResponseId(res));
+    const name = getResponseId(res);
     const review = ratings[getResponseId(res)]?.[reviewer];
     if (name && review) {
       data.push({
@@ -497,6 +497,22 @@ async function switchReviewer() {
     if (!reviewFolderHandle) {
       await showFolderModalAndWait();
       if (!reviewFolderHandle) return; // User cancelled
+    }
+    // Load <reviewer>.json if it exists and pre-fill ratings/comments
+    try {
+      const fileHandle = await reviewFolderHandle.getFileHandle(`${selected}.json`);
+      const file = await fileHandle.getFile();
+      const text = await file.text();
+      const reviewerData = JSON.parse(text);
+      // reviewerData: [{id, name, mark, comment}]
+      for (const entry of reviewerData) {
+        if (!ratings[entry.id]) ratings[entry.id] = {};
+        ratings[entry.id][selected] = { status: entry.mark, comment: entry.comment };
+      }
+      localStorage.setItem('ratings_v1', JSON.stringify(ratings));
+      // Optionally: alert('Loaded previous review data for this reviewer!');
+    } catch (e) {
+      // File does not exist, that's fine
     }
     reviewerInput.value = selected;
     updateAddReviewerUI();
@@ -562,7 +578,7 @@ function handleFile(e) {
 
 function populateUserSelect() {
   userSelect.innerHTML = '<option value="">Select a user</option>';
-  const names = Array.from(new Set(responses.map(r => r['Name']?.value || r['Name']).filter(Boolean)));
+  const names = Array.from(new Set(responses.map(r => getDisplayName(r)).filter(Boolean)));
   names.sort().forEach(name => {
     const option = document.createElement('option');
     option.value = name;
@@ -571,9 +587,17 @@ function populateUserSelect() {
   });
 }
 
+// Helper to get a unique respondent ID for internal use (uses both 'ID' and 'Name' if ID exists, else just Name)
 function getResponseId(res) {
-  // Handle both old format (res.Name) and new format (res.Name.value)
-  return res.Name?.value || res.Name;
+  const id = res.ID?.value || res.ID;
+  const name = res.Name?.value || res.Name;
+  // If both ID and Name exist, combine them for uniqueness; else just use Name
+  return id && name ? `${id}__${name}` : String(name);
+}
+
+// Helper to get the respondent's display name (always present)
+function getDisplayName(res) {
+  return res.Name?.value || res.Name || '';
 }
 
 function renderCards() {
@@ -584,8 +608,9 @@ function renderCards() {
   cardsContainer.innerHTML = '';
 
   responses.filter(res => {
-    const name = res['Name']?.value || res['Name'];
-    const nameMatch = name?.toLowerCase().includes(searchVal);
+    const displayName = getDisplayName(res);
+    const nameStr = String(displayName || ''); // Ensure it's a string
+    const nameMatch = nameStr.toLowerCase().includes(searchVal);
     const allRatings = ratings[getResponseId(res)] || {};
     const reviewerRatings = Object.values(allRatings);
     const statusMatch = filterVal === 'All' || reviewerRatings.some(r => r.status === filterVal);
@@ -625,7 +650,7 @@ function renderCards() {
     }
 
     const name = document.createElement('h3');
-    name.textContent = res['Name']?.value || res['Name'] || `Respondent ${idx + 1}`;
+    name.textContent = getDisplayName(res) || `Respondent ${idx + 1}`;
 
     // Group Q&A by category and subcategory
     const qaBlock = document.createElement('div');
@@ -708,7 +733,7 @@ function showDetail(res) {
   const detail = document.createElement('div');
   detail.className = 'detail-view';
   const name = document.createElement('h2');
-  name.textContent = res['Name']?.value || res['Name'];
+  name.textContent = getDisplayName(res);
 
   // Group Q&A by category and subcategory
   const qaBlock = document.createElement('div');
@@ -862,7 +887,7 @@ function renderSummaryTable() {
 
   responses.forEach(res => {
     const id = getResponseId(res);
-    const name = res['Name']?.value || res['Name'] || 'Unknown';
+    const name = getDisplayName(res) || 'Unknown';
     html += `<tr><td>${name}</td>`;
     reviewers.forEach(reviewer => {
       const review = ratings[id]?.[reviewer] || {};
@@ -903,10 +928,10 @@ function exportReviews() {
 
   // Add data rows
   responses.forEach(res => {
-    const name = res['Name']?.value || res['Name'] || 'Unknown';
+    const name = getDisplayName(res) || 'Unknown';
     csvContent += `"${name}",`;
     reviewers.forEach(reviewer => {
-      const review = ratings[name]?.[reviewer] || {};
+      const review = ratings[getResponseId(res)]?.[reviewer] || {};
       csvContent += `"${review.status || ''}","${review.comment || ''}",`;
     });
     csvContent = csvContent.slice(0, -1) + '\n';
@@ -920,7 +945,7 @@ function exportReviews() {
     reviewers: reviewers,
     reviews: ratings,
     responses: responses.map(res => ({
-      name: res['Name']?.value || res['Name'] || 'Unknown',
+      name: getDisplayName(res) || 'Unknown',
       data: res
     }))
   };
